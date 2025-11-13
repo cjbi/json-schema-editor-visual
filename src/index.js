@@ -1,10 +1,9 @@
 import React from 'react';
-import { render } from 'react-dom';
-import 'antd/dist/antd.css';
+import { createRoot } from 'react-dom/client';
+import 'antd/dist/reset.css';
 
-import '../dist/main.css'
-const jeditor = require('../dist/main');
-//const jeditor = require('../package/index.js');
+import '../package/index.css';
+import jeditor from '../package/index.js';
 const mock = [
   { name: '字符串', mock: '@string' },
   { name: '自然数', mock: '@natural' },
@@ -22,7 +21,10 @@ const mock = [
 
 const JEditor1 = jeditor({mock: mock});
 
-render(
+const container = document.getElementById('root');
+const root = createRoot(container);
+
+root.render(
   <div>
     <a target="_blank" href="https://github.com/YMFE/json-schema-editor-visual">
       <h1>JSON-Schema-Editor</h1>
@@ -61,6 +63,5 @@ render(
         // console.log("changeValue", e);
       }}
     /> */}
-  </div>,
-  document.getElementById('root')
+  </div>
 );

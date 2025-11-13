@@ -22,11 +22,22 @@ export default class FieldInput extends PureComponent {
     })
   }
 
-  componentWillReceiveProps(nextProps){
-    if(nextProps.value !== this.props.value){
+  static getDerivedStateFromProps(nextProps, prevState) {
+    if (nextProps.value !== prevState.value && nextProps.value !== prevState.prevPropsValue) {
+      return {
+        value: nextProps.value,
+        prevPropsValue: nextProps.value
+      };
+    }
+    return null;
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.value !== this.props.value) {
       this.setState({
-        value: nextProps.value
-      })
+        value: this.props.value,
+        prevPropsValue: this.props.value
+      });
     }
   }
 

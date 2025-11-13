@@ -28,22 +28,23 @@ const Option = Select.Option;
 const { TextArea } = Input;
 import './schemaJson.css';
 import _ from 'underscore';
-import { connect } from 'react-redux';
+import { connect, useSelector } from 'react-redux';
 import PropTypes from 'prop-types';
 import { JSONPATH_JOIN_CHAR, SCHEMA_TYPE } from '../../utils.js';
 const InputGroup = Input.Group;
 import LocaleProvider from '../LocalProvider/index.js';
 import utils from '../../utils';
 import MockSelect from '../MockSelect/index.js';
+import { SchemaContext } from '../../SchemaContext.js';
 
-const mapping = (name, data, showEdit, showAdv) => {
+const mapping = (name, data, showEdit, showAdv, contextValue) => {
   switch (data.type) {
     case 'array':
-      return <SchemaArray prefix={name} data={data} showEdit={showEdit} showAdv={showAdv} />;
+      return <SchemaArray prefix={name} data={data} showEdit={showEdit} showAdv={showAdv} contextValue={contextValue} />;
       break;
     case 'object':
       let nameArray = [].concat(name, 'properties');
-      return <SchemaObject prefix={nameArray} data={data} showEdit={showEdit} showAdv={showAdv} />;
+      return <SchemaObject prefix={nameArray} data={data} showEdit={showEdit} showAdv={showAdv} contextValue={contextValue} />;
       break;
     default:
       return null;
@@ -51,29 +52,42 @@ const mapping = (name, data, showEdit, showAdv) => {
 };
 
 class SchemaArray extends PureComponent {
-  constructor(props, context) {
+  constructor(props) {
     super(props);
-    this._tagPaddingLeftStyle = {};
-    this.Model = context.Model.schema;
-  }
-
-  componentWillMount() {
-    const { prefix } = this.props;
+    const { prefix } = props;
     let length = prefix.filter(name => name != 'properties').length;
     this.__tagPaddingLeftStyle = {
       paddingLeft: `${20 * (length + 1)}px`
     };
   }
 
+  static contextType = SchemaContext;
+
   getPrefix() {
     return [].concat(this.props.prefix, 'items');
+  }
+
+  getModel() {
+    // 优先使用 props 传递的 contextValue，如果没有则使用 context
+    const context = this.props.contextValue || this.context || {};
+    const model = context?.Model?.schema || {};
+    if (!model.changeTypeAction && !this.props.contextValue) {
+      console.warn('SchemaArray: Model methods not available', { context: this.context, props: this.props });
+    }
+    return model;
+  }
+  
+  getContext() {
+    // 优先使用 props 传递的 contextValue，如果没有则使用 context
+    return this.props.contextValue || this.context || {};
   }
 
   // 修改数据类型
   handleChangeType = value => {
     let prefix = this.getPrefix();
     let key = [].concat(prefix, 'type');
-    this.Model.changeTypeAction({ key, value });
+    const model = this.getModel();
+    if (model.changeTypeAction) model.changeTypeAction({ key, value });
   };
 
   // 修改备注信息
@@ -81,7 +95,8 @@ class SchemaArray extends PureComponent {
     let prefix = this.getPrefix();
     let key = [].concat(prefix, `description`);
     let value = e.target.value;
-    this.Model.changeValueAction({ key, value });
+    const model = this.getModel();
+    if (model.changeValueAction) model.changeValueAction({ key, value });
   };
 
   // 修改mock信息
@@ -89,29 +104,33 @@ class SchemaArray extends PureComponent {
     let prefix = this.getPrefix();
     let key = [].concat(prefix, `mock`);
     let value = e ? { mock: e } : '';
-    this.Model.changeValueAction({ key, value });
+    const model = this.getModel();
+    if (model.changeValueAction) model.changeValueAction({ key, value });
   };
 
   handleChangeTitle = e =>{
     let prefix = this.getPrefix();
     let key = [].concat(prefix, `title`);
     let value = e.target.value;
-    this.Model.changeValueAction({ key, value });
+    const model = this.getModel();
+    if (model.changeValueAction) model.changeValueAction({ key, value });
   }
 
   // 增加子节点
   handleAddChildField = () => {
     let prefix = this.getPrefix();
     let keyArr = [].concat(prefix, 'properties');
-    this.Model.addChildFieldAction({ key: keyArr });
-    this.Model.setOpenValueAction({ key: keyArr, value: true });
+    const model = this.getModel();
+    if (model.addChildFieldAction) model.addChildFieldAction({ key: keyArr });
+    if (model.setOpenValueAction) model.setOpenValueAction({ key: keyArr, value: true });
   };
 
   handleClickIcon = () => {
     let prefix = this.getPrefix();
     // 数据存储在 properties.name.properties下
     let keyArr = [].concat(prefix, 'properties');
-    this.Model.setOpenValueAction({ key: keyArr });
+    const model = this.getModel();
+    if (model.setOpenValueAction) model.setOpenValueAction({ key: keyArr });
   };
 
   handleShowEdit = (name, type) => {
@@ -125,21 +144,22 @@ class SchemaArray extends PureComponent {
 
   render() {
     const { data, prefix, showEdit, showAdv } = this.props;
+    const context = this.getContext();
     const items = data.items;
     let prefixArray = [].concat(prefix, 'items');
 
     let prefixArrayStr = [].concat(prefixArray, 'properties').join(JSONPATH_JOIN_CHAR);
-    let showIcon = this.context.getOpenValue([prefixArrayStr]);
+    let showIcon = context.getOpenValue ? context.getOpenValue([prefixArrayStr]) : true;
     return (
       !_.isUndefined(data.items) && (
         <div className="array-type">
-          <Row className="array-item-type" type="flex" justify="space-around" align="middle">
+          <Row className="array-item-type" justify="space-around" align="middle">
             <Col
               span={8}
               className="col-item name-item col-item-name"
               style={this.__tagPaddingLeftStyle}
             >
-              <Row type="flex" justify="space-around" align="middle">
+              <Row justify="space-around" align="middle">
                 <Col span={2} className="down-style-col">
                   {items.type === 'object' ? (
                     <span className="down-style" onClick={this.handleClickIcon}>
@@ -172,7 +192,7 @@ class SchemaArray extends PureComponent {
                 })}
               </Select>
             </Col>
-            {this.context.isMock && (
+            {(context.isMock || false) && (
               <Col span={3} className="col-item col-item-mock">
                 
                 <MockSelect
@@ -182,7 +202,7 @@ class SchemaArray extends PureComponent {
                 />
               </Col>
             )}
-            <Col span={this.context.isMock ? 4 : 5} className="col-item col-item-mock">
+            <Col span={(context.isMock || false) ? 4 : 5} className="col-item col-item-mock">
               <Input
                 addonAfter={<EditOutlined type="edit" onClick={() => this.handleShowEdit('title')} />}
                 placeholder={LocaleProvider('title')}
@@ -190,7 +210,7 @@ class SchemaArray extends PureComponent {
                 onChange={this.handleChangeTitle}
               />
             </Col>
-            <Col span={this.context.isMock ? 4 : 5} className="col-item col-item-desc">
+            <Col span={(context.isMock || false) ? 4 : 5} className="col-item col-item-desc">
               <Input
                 addonAfter={<EditOutlined type="edit" onClick={() => this.handleShowEdit('description')} />}
                 placeholder={LocaleProvider('description')}
@@ -198,7 +218,7 @@ class SchemaArray extends PureComponent {
                 onChange={this.handleChangeDesc}
               />
             </Col>
-            <Col span={this.context.isMock ? 2: 3} className="col-item col-item-setting">
+            <Col span={(context.isMock || false) ? 2: 3} className="col-item col-item-setting">
               <span className="adv-set" onClick={this.handleShowAdv}>
                 <Tooltip placement="top" title={LocaleProvider('adv_setting')}>
                   <SettingOutlined type="setting" />
@@ -221,30 +241,36 @@ class SchemaArray extends PureComponent {
   }
 }
 
-SchemaArray.contextTypes = {
-  getOpenValue: PropTypes.func,
-  Model: PropTypes.object,
-  isMock: PropTypes.bool
-};
 
 class SchemaItem extends PureComponent {
-  constructor(props, context) {
+  constructor(props) {
     super(props);
-    this._tagPaddingLeftStyle = {};
-    // this.num = 0
-    this.Model = context.Model.schema;
-  }
-
-  componentWillMount() {
-    const { prefix } = this.props;
+    const { prefix } = props;
     let length = prefix.filter(name => name != 'properties').length;
     this.__tagPaddingLeftStyle = {
       paddingLeft: `${20 * (length + 1)}px`
     };
   }
 
+  static contextType = SchemaContext;
+
   getPrefix() {
     return [].concat(this.props.prefix, this.props.name);
+  }
+
+  getModel() {
+    // 优先使用 props 传递的 contextValue，如果没有则使用 context
+    const context = this.props.contextValue || this.context || {};
+    const model = context?.Model?.schema || {};
+    if (!model.changeNameAction && !this.props.contextValue) {
+      console.warn('SchemaItem: Model methods not available', { context: this.context, props: this.props });
+    }
+    return model;
+  }
+  
+  getContext() {
+    // 优先使用 props 传递的 contextValue，如果没有则使用 context
+    return this.props.contextValue || this.context || {};
   }
 
   // 修改节点字段名
@@ -256,7 +282,8 @@ class SchemaItem extends PureComponent {
       return message.error(`The field "${value}" already exists.`);
     }
 
-    this.Model.changeNameAction({ value, prefix, name });
+    const model = this.getModel();
+    if (model.changeNameAction) model.changeNameAction({ value, prefix, name });
   };
 
   // 修改备注信息
@@ -264,7 +291,8 @@ class SchemaItem extends PureComponent {
     let prefix = this.getPrefix();
     let key = [].concat(prefix, 'description');
     let value = e.target.value;
-    this.Model.changeValueAction({ key, value });
+    const model = this.getModel();
+    if (model.changeValueAction) model.changeValueAction({ key, value });
   };
 
   // 修改mock 信息
@@ -272,29 +300,33 @@ class SchemaItem extends PureComponent {
     let prefix = this.getPrefix();
     let key = [].concat(prefix, `mock`);
     let value = e ? { mock: e } : '';
-    this.Model.changeValueAction({ key, value });
+    const model = this.getModel();
+    if (model.changeValueAction) model.changeValueAction({ key, value });
   };
 
   handleChangeTitle = e => {
     let prefix = this.getPrefix();
     let key = [].concat(prefix, `title`);
     let value = e.target.value;
-    this.Model.changeValueAction({ key, value });
+    const model = this.getModel();
+    if (model.changeValueAction) model.changeValueAction({ key, value });
   }
 
   // 修改数据类型
   handleChangeType = e => {
     let prefix = this.getPrefix();
     let key = [].concat(prefix, 'type');
-    this.Model.changeTypeAction({ key, value: e });
+    const model = this.getModel();
+    if (model.changeTypeAction) model.changeTypeAction({ key, value: e });
   };
 
   // 删除节点
   handleDeleteItem = () => {
     const { prefix, name } = this.props;
     let nameArray = this.getPrefix();
-    this.Model.deleteItemAction({ key: nameArray });
-    this.Model.enableRequireAction({ prefix, name, required: false });
+    const model = this.getModel();
+    if (model.deleteItemAction) model.deleteItemAction({ key: nameArray });
+    if (model.enableRequireAction) model.enableRequireAction({ prefix, name, required: false });
   };
   /*
   展示备注编辑弹窗
@@ -316,7 +348,8 @@ class SchemaItem extends PureComponent {
   //  增加子节点
   handleAddField = () => {
     const { prefix, name } = this.props;
-    this.Model.addFieldAction({ prefix, name });
+    const model = this.getModel();
+    if (model.addFieldAction) model.addFieldAction({ prefix, name });
   };
 
   // 控制三角形按钮
@@ -324,7 +357,8 @@ class SchemaItem extends PureComponent {
     let prefix = this.getPrefix();
     // 数据存储在 properties.xxx.properties 下
     let keyArr = [].concat(prefix, 'properties');
-    this.Model.setOpenValueAction({ key: keyArr });
+    const model = this.getModel();
+    if (model.setOpenValueAction) model.setOpenValueAction({ key: keyArr });
   };
 
   // 修改是否必须
@@ -332,7 +366,8 @@ class SchemaItem extends PureComponent {
     const { prefix, name } = this.props;
     let required = e.target.checked;
     // this.enableRequire(this.props.prefix, this.props.name, e.target.checked);
-    this.Model.enableRequireAction({ prefix, name, required });
+    const model = this.getModel();
+    if (model.enableRequireAction) model.enableRequireAction({ prefix, name, required });
   };
 
   render() {
@@ -340,19 +375,20 @@ class SchemaItem extends PureComponent {
     let value = data.properties[name];
     let prefixArray = [].concat(prefix, name);
 
+    const context = this.getContext();
     let prefixStr = prefix.join(JSONPATH_JOIN_CHAR);
     let prefixArrayStr = [].concat(prefixArray, 'properties').join(JSONPATH_JOIN_CHAR);
-    let show = this.context.getOpenValue([prefixStr]);
-    let showIcon = this.context.getOpenValue([prefixArrayStr]);
+    let show = context.getOpenValue ? context.getOpenValue([prefixStr]) : true;
+    let showIcon = context.getOpenValue ? context.getOpenValue([prefixArrayStr]) : true;
     return show ? (
       <div>
-        <Row type="flex" justify="space-around" align="middle">
+        <Row justify="space-around" align="middle">
           <Col
             span={8}
             className="col-item name-item col-item-name"
             style={this.__tagPaddingLeftStyle}
           >
-            <Row type="flex" justify="space-around" align="middle">
+            <Row justify="space-around" align="middle">
               <Col span={2} className="down-style-col">
                 {value.type === 'object' ? (
                   <span className="down-style" onClick={this.handleClickIcon}>
@@ -401,7 +437,7 @@ class SchemaItem extends PureComponent {
           </Col>
 
 
-          {this.context.isMock && (
+          {(context.isMock || false) && (
             <Col span={3} className="col-item col-item-mock">
               {/* <Input
                 addonAfter={
@@ -420,7 +456,7 @@ class SchemaItem extends PureComponent {
             </Col>
           )}
 
-          <Col span={this.context.isMock ? 4 : 5} className="col-item col-item-mock">
+          <Col span={(context.isMock || false) ? 4 : 5} className="col-item col-item-mock">
             <Input
               addonAfter={<EditOutlined type="edit" onClick={() => this.handleShowEdit('title')} />}
               placeholder={LocaleProvider('title')}
@@ -429,7 +465,7 @@ class SchemaItem extends PureComponent {
             />
           </Col>
 
-          <Col span={this.context.isMock ? 4 : 5} className="col-item col-item-desc">
+          <Col span={(context.isMock || false) ? 4 : 5} className="col-item col-item-desc">
             <Input
               addonAfter={<EditOutlined type="edit" onClick={() => this.handleShowEdit('description')} />}
               placeholder={LocaleProvider('description')}
@@ -439,7 +475,7 @@ class SchemaItem extends PureComponent {
           </Col>
 
           
-          <Col span={this.context.isMock ? 2: 3}  className="col-item col-item-setting">
+          <Col span={(context.isMock || false) ? 2: 3}  className="col-item col-item-setting">
             <span className="adv-set" onClick={this.handleShowAdv}>
               <Tooltip placement="top" title={LocaleProvider('adv_setting')}>
                 <SettingOutlined type="setting" />
@@ -465,85 +501,94 @@ class SchemaItem extends PureComponent {
   }
 }
 
-SchemaItem.contextTypes = {
-  getOpenValue: PropTypes.func,
-  Model: PropTypes.object,
-  isMock: PropTypes.bool
-};
 
-class SchemaObjectComponent extends Component {
-  shouldComponentUpdate(nextProps) {
-    if (
-      _.isEqual(nextProps.data, this.props.data) &&
-      _.isEqual(nextProps.prefix, this.props.prefix) &&
-      _.isEqual(nextProps.open, this.props.open)
-    ) {
-      return false;
-    }
-    return true;
-  }
-
-  render() {
-    const { data, prefix, showEdit, showAdv } = this.props;
-    return (
-      <div className="object-style">
-        {Object.keys(data.properties).map((name, index) => (
-          <SchemaItem
-            key={index}
-            data={this.props.data}
-            name={name}
-            prefix={prefix}
-            showEdit={showEdit}
-            showAdv={showAdv}
-          />
-        ))}
-      </div>
-    );
-  }
-}
-
-const SchemaObject = connect(state => ({
-  open: state.schema.open
-}))(SchemaObjectComponent);
-
-const DropPlus = (props, context) => {
-  const { prefix, name, add } = props;
-  const Model = context.Model.schema;
-  const menu = (
-    <Menu>
-      <Menu.Item>
-        <span onClick={() => Model.addFieldAction({ prefix, name })}>
-          {LocaleProvider('sibling_node')}
-        </span>
-      </Menu.Item>
-      <Menu.Item>
-        <span
-          onClick={() => {
-            Model.setOpenValueAction({ key: [].concat(prefix, name, 'properties'), value: true });
-            Model.addChildFieldAction({ key: [].concat(prefix, name, 'properties') });
-          }}
-        >
-          {LocaleProvider('child_node')}
-        </span>
-      </Menu.Item>
-    </Menu>
+const SchemaObject = React.memo((props) => {
+  const { data, prefix, showEdit, showAdv, contextValue } = props;
+  const open = useSelector(state => state.schema.open);
+  
+  return (
+    <div className="object-style">
+      {Object.keys(data.properties).map((name, index) => (
+        <SchemaItem
+          key={index}
+          data={data}
+          name={name}
+          prefix={prefix}
+          showEdit={showEdit}
+          showAdv={showAdv}
+          contextValue={contextValue}
+        />
+      ))}
+    </div>
   );
+}, (prevProps, nextProps) => {
+  return (
+    _.isEqual(nextProps.data, prevProps.data) &&
+    _.isEqual(nextProps.prefix, prevProps.prefix)
+  );
+});
+
+const DropPlus = (props) => {
+  const { prefix, name, add } = props;
+  const context = React.useContext(SchemaContext) || {};
+  const Model = context.Model?.schema || {};
+  
+  const handleAddSibling = () => {
+    console.log('handleAddSibling called', { prefix, name, Model, context });
+    if (Model.addFieldAction) {
+      Model.addFieldAction({ prefix, name });
+    } else {
+      console.warn('Model.addFieldAction is not available', context);
+    }
+  };
+  
+  const handleAddChild = () => {
+    const key = [].concat(prefix, name, 'properties');
+    console.log('handleAddChild called', { key, Model, context });
+    if (Model.setOpenValueAction) {
+      Model.setOpenValueAction({ key, value: true });
+    }
+    if (Model.addChildFieldAction) {
+      Model.addChildFieldAction({ key });
+    } else {
+      console.warn('Model.addChildFieldAction is not available', context);
+    }
+  };
+  
+  const menu = {
+    items: [
+      {
+        key: 'sibling',
+        label: (
+          <span onClick={handleAddSibling}>
+            {LocaleProvider('sibling_node')}
+          </span>
+        )
+      },
+      {
+        key: 'child',
+        label: (
+          <span onClick={handleAddChild}>
+            {LocaleProvider('child_node')}
+          </span>
+        )
+      }
+    ]
+  };
 
   return (
     <Tooltip placement="top" title={LocaleProvider('add_node')}>
-      <Dropdown overlay={menu}>
+      <Dropdown menu={menu}>
         <PlusOutlined type="plus" className="plus" />
       </Dropdown>
     </Tooltip>
   );
 };
 
-DropPlus.contextTypes = {
-  Model: PropTypes.object
-};
-
 const SchemaJson = props => {
-  const item = mapping([], props.data, props.showEdit, props.showAdv);
+  // 从 Context 获取值并传递给子组件
+  const contextValue = React.useContext(SchemaContext) || {};
+  const item = mapping([], props.data, props.showEdit, props.showAdv, contextValue);
   return <div className="schema-content">{item}</div>;
 };
 

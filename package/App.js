@@ -23,7 +23,6 @@ import {
 const FormItem = Form.Item;
 const Option = Select.Option;
 const { TextArea } = Input;
-const TabPane = Tabs.TabPane;
 
 import './index.css';
 import AceEditor from './components/AceEditor/AceEditor.js';
@@ -39,7 +38,8 @@ import CustomItem from './components/SchemaComponents/SchemaOther.js';
 import LocalProvider from './components/LocalProvider/index.js';
 import MockSelect from './components/MockSelect/index.js';
 
-
+// 从单独的文件导入 Context，避免循环依赖
+import { SchemaContext } from './SchemaContext.js';
 
 class jsonSchema extends React.Component {
   constructor(props) {
@@ -89,18 +89,7 @@ class jsonSchema extends React.Component {
     this.setState({ visible: false });
   };
 
-  componentWillReceiveProps(nextProps) {
-    if (typeof this.props.onChange === 'function' && this.props.schema !== nextProps.schema) {
-      let oldData = JSON.stringify(this.props.schema || '');
-      let newData = JSON.stringify(nextProps.schema || '');
-      if (oldData !== newData) return this.props.onChange(newData);
-    }
-    if (this.props.data && this.props.data !== nextProps.data) {
-      this.Model.changeEditorSchemaAction({ value: JSON.parse(nextProps.data) });
-    }
-  }
-
-  componentWillMount() {
+  componentDidMount() {
     let data = this.props.data;
     if (!data) {
       data = `{
@@ -112,15 +101,15 @@ class jsonSchema extends React.Component {
     this.Model.changeEditorSchemaAction({ value: JSON.parse(data) });
   }
 
-  getChildContext() {
-    return {
-      getOpenValue: keys => {
-        return utils.getData(this.props.open, keys);
-      },
-      changeCustomValue: this.changeCustomValue,
-      Model: this.props.Model,
-      isMock: this.props.isMock
-    };
+  componentDidUpdate(prevProps) {
+    if (typeof this.props.onChange === 'function' && this.props.schema !== prevProps.schema) {
+      let oldData = JSON.stringify(prevProps.schema || '');
+      let newData = JSON.stringify(this.props.schema || '');
+      if (oldData !== newData) return this.props.onChange(newData);
+    }
+    if (this.props.data && this.props.data !== prevProps.data) {
+      this.Model.changeEditorSchemaAction({ value: JSON.parse(this.props.data) });
+    }
   }
 
   alterMsg = () => {
@@ -278,108 +267,128 @@ class jsonSchema extends React.Component {
     let disabled =
       this.props.schema.type === 'object' || this.props.schema.type === 'array' ? false : true;
 
+    const contextValue = {
+      getOpenValue: keys => {
+        return utils.getData(this.props.open, keys);
+      },
+      changeCustomValue: this.changeCustomValue,
+      Model: this.props.Model,
+      isMock: this.props.isMock
+    };
+    
+    // 添加调试日志
+    if (!this.props.Model || !this.props.Model.schema) {
+      console.error('Model is not properly passed to App component', this.props);
+    }
+
     return (
-      <div className="json-schema-react-editor">
-        <Button className="import-json-button" type="primary" onClick={this.showModal}>
-          {LocalProvider('import_json')}
-        </Button>
-        <Modal
-          maskClosable={false}
-          visible={visible}
-          title={LocalProvider('import_json')}
-          onOk={this.handleOk}
-          onCancel={this.handleCancel}
-          className="json-schema-react-editor-import-modal"
-          okText={'ok'}
-          cancelText={LocalProvider('cancel')}
-          footer={[
-            <Button key="back" onClick={this.handleCancel}>
-              {LocalProvider('cancel')}
-            </Button>,
-            <Button key="submit" type="primary" onClick={this.handleOk}>
-              {LocalProvider('ok')}
-            </Button>
-          ]}
-        >
-          <Tabs
-            defaultActiveKey="json"
-            onChange={key => {
-              this.importJsonType = key;
-            }}
-          >
-            <TabPane tab="JSON" key="json">
-              <AceEditor data="" mode="json" onChange={this.handleImportJson} />
-            </TabPane>
-            <TabPane tab="JSON-SCHEMA" key="schema">
-              <AceEditor data="" mode="json" onChange={this.handleImportJsonSchema} />
-            </TabPane>
-          </Tabs>
-        </Modal>
-
-        <Modal
-          title={
-            <div>
-              {LocalProvider(editorModalName)}
-              &nbsp;
-              {editorModalName === 'mock' && (
-                <Tooltip title={LocalProvider('mockLink')}>
-                  <a
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    href="https://github.com/YMFE/json-schema-editor-visual/issues/38"
-                  >
-                    <QuestionCircleOutlined />
-                  </a>
-                </Tooltip>
-              )}
-            </div>
-          }
-          maskClosable={false}
-          visible={editVisible}
-          onOk={() => this.handleEditOk(editorModalName)}
-          onCancel={this.handleEditCancel}
-          okText={LocalProvider('ok')}
-          cancelText={LocalProvider('cancel')}
-        >
-          <TextArea
-            value={this.state[editorModalName]}
-            placeholder={LocalProvider(editorModalName)}
-            onChange={e => this.changeDesc(e.target.value, editorModalName)}
-            autosize={{ minRows: 6, maxRows: 10 }}
-          />
-        </Modal>
-
-        {advVisible && (
+      <SchemaContext.Provider value={contextValue}>
+        <div className="json-schema-react-editor">
+          <Button className="import-json-button" type="primary" onClick={this.showModal}>
+            {LocalProvider('import_json')}
+          </Button>
           <Modal
-            title={LocalProvider('adv_setting')}
             maskClosable={false}
-            visible={advVisible}
-            onOk={this.handleAdvOk}
-            onCancel={this.handleAdvCancel}
-            okText={LocalProvider('ok')}
-            width={780}
+            open={visible}
+            title={LocalProvider('import_json')}
+            onOk={this.handleOk}
+            onCancel={this.handleCancel}
+            className="json-schema-react-editor-import-modal"
+            okText={'ok'}
             cancelText={LocalProvider('cancel')}
-            className="json-schema-react-editor-adv-modal"
+            footer={[
+              <Button key="back" onClick={this.handleCancel}>
+                {LocalProvider('cancel')}
+              </Button>,
+              <Button key="submit" type="primary" onClick={this.handleOk}>
+                {LocalProvider('ok')}
+              </Button>
+            ]}
           >
-            <CustomItem data={JSON.stringify(this.state.curItemCustomValue, null, 2)} />
+            <Tabs
+              defaultActiveKey="json"
+              onChange={key => {
+                this.importJsonType = key;
+              }}
+              items={[
+                {
+                  key: 'json',
+                  label: 'JSON',
+                  children: <AceEditor data="" mode="json" onChange={this.handleImportJson} />
+                },
+                {
+                  key: 'schema',
+                  label: 'JSON-SCHEMA',
+                  children: <AceEditor data="" mode="json" onChange={this.handleImportJsonSchema} />
+                }
+              ]}
+            />
           </Modal>
-        )}
 
-        <Row>
-          {this.props.showEditor && (
-            <Col span={8}>
-              <AceEditor
-                className="pretty-editor"
-                mode="json"
-                data={JSON.stringify(schema, null, 2)}
-                onChange={this.handleParams}
-              />
-            </Col>
+          <Modal
+            title={
+              <div>
+                {LocalProvider(editorModalName)}
+                &nbsp;
+                {editorModalName === 'mock' && (
+                  <Tooltip title={LocalProvider('mockLink')}>
+                    <a
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      href="https://github.com/YMFE/json-schema-editor-visual/issues/38"
+                    >
+                      <QuestionCircleOutlined />
+                    </a>
+                  </Tooltip>
+                )}
+              </div>
+            }
+            maskClosable={false}
+            open={editVisible}
+            onOk={() => this.handleEditOk(editorModalName)}
+            onCancel={this.handleEditCancel}
+            okText={LocalProvider('ok')}
+            cancelText={LocalProvider('cancel')}
+          >
+            <TextArea
+              value={this.state[editorModalName]}
+              placeholder={LocalProvider(editorModalName)}
+              onChange={e => this.changeDesc(e.target.value, editorModalName)}
+              autoSize={{ minRows: 6, maxRows: 10 }}
+            />
+          </Modal>
+
+          {advVisible && (
+            <Modal
+              title={LocalProvider('adv_setting')}
+              maskClosable={false}
+              open={advVisible}
+              onOk={this.handleAdvOk}
+              onCancel={this.handleAdvCancel}
+              okText={LocalProvider('ok')}
+              width={780}
+              cancelText={LocalProvider('cancel')}
+              className="json-schema-react-editor-adv-modal"
+            >
+              <CustomItem data={JSON.stringify(this.state.curItemCustomValue, null, 2)} />
+            </Modal>
           )}
-          <Col span={this.props.showEditor ? 16 : 24} className="wrapper object-style">
-            <Row type="flex" align="middle">
-              <Col span={8} className="col-item name-item col-item-name">
-                <Row type="flex" justify="space-around" align="middle">
+
+          <Row>
+            {this.props.showEditor && (
+              <Col span={8}>
+                <AceEditor
+                  className="pretty-editor"
+                  mode="json"
+                  data={JSON.stringify(schema, null, 2)}
+                  onChange={this.handleParams}
+                />
+              </Col>
+            )}
+            <Col span={this.props.showEditor ? 16 : 24} className="wrapper object-style">
+              <Row align="middle">
+                <Col span={8} className="col-item name-item col-item-name">
+                  <Row justify="space-around" align="middle">
                   <Col span={2} className="down-style-col">
                     {schema.type === 'object' ? (
                       <span className="down-style" onClick={this.clickIcon}>
@@ -486,17 +495,11 @@ class jsonSchema extends React.Component {
             )}
           </Col>
         </Row>
-      </div>
+        </div>
+      </SchemaContext.Provider>
     );
   }
 }
-
-jsonSchema.childContextTypes = {
-  getOpenValue: PropTypes.func,
-  changeCustomValue: PropTypes.func,
-  Model: PropTypes.object,
-  isMock: PropTypes.bool
-};
 
 jsonSchema.propTypes = {
   data: PropTypes.string,
