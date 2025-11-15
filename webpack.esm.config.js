@@ -1,18 +1,20 @@
 const path = require('path');
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 
+// ES Module build configuration
 module.exports = {
   entry: './package/index.js',
   mode: "production",
+  experiments: {
+    outputModule: true, // Enable ES modules output
+  },
   output: {
     path: path.resolve(__dirname, 'dist'),
     publicPath: "/dist/",
     library: {
-      name: 'schema',
-      type: 'umd',
-      export: 'default'
+      type: 'module' // ES Module format
     },
-    filename: 'main.umd.js',
+    filename: 'main.js',
     globalObject: 'this'
   },
   module: {
@@ -44,3 +46,4 @@ module.exports = {
     extensions: ['.js', '.jsx', '.json']
   }
 };
+

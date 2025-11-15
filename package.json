@@ -2,12 +2,23 @@
   "name": "json-schema-editor-visual",
   "version": "2.0.0",
   "description": "jsonschema editor",
-  "main": "package/index.js",
+  "main": "dist/main.umd.js",
+  "module": "dist/main.js",
+  "exports": {
+    ".": {
+      "import": "./dist/main.js",
+      "require": "./dist/main.umd.js",
+      "default": "./package/index.js"
+    },
+    "./dist/main.css": "./dist/main.css"
+  },
   "license": "MIC",
   "scripts": {
     "start": "webpack serve --mode development --port 8082 --open",
     "demo": "cross-env NODE_ENV=production webpack --mode production",
     "build": "cross-env NODE_ENV=production webpack --mode production",
+    "build:esm": "cross-env NODE_ENV=production webpack --config webpack.esm.config.js --mode production",
+    "build:all": "npm run build && npm run build:esm",
     "build:prd": "webpack --config webpack.prd.config.js --mode production",
     "build:prd:dev": "webpack --config webpack.prd.config.js --mode development",
     "serve": "webpack serve --config webpack.dev.config.js --mode development --port 8082"
@@ -17,6 +28,7 @@
     "antd": "^5.22.0",
     "brace": "^0.10.0",
     "generate-schema": "^2.6.0",
+    "json-schema-editor-visual": "^2.0.0",
     "moox": "^1.0.2",
     "prop-types": "^15.8.1",
     "react": "^18.3.1",
